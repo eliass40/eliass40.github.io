@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crossword</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1b212b;
+    --tile: #262e3b;
+    --tile-active: #303a4a;
+    --key: #38362f;
+    --key-active: #433f35;
+    --line: rgba(231, 223, 208, 0.10);
+    --line-strong: rgba(231, 223, 208, 0.22);
+    --ink: #e7dfd0;
+    --ink-soft: #b5aea2;
+    --mute: #7f8696;
+    --brass: #c2a061;
+    --brass-soft: rgba(194, 160, 97, 0.5);
+    --sage: #93a98f;
+    --rose: #c3887d;
+
+    --serif: "Fraunces", Georgia, "Times New Roman", serif;
+    --sans: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+    --cell: 56px;
+    --gap: 6px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 0;
+  }
+  button:disabled { cursor: default; opacity: 0.35; }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; border-radius: 4px; }
+
+  /* ---------- Layout ---------- */
+  .app {
+    height: 100vh;
+    height: 100dvh;
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(340px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .top {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    padding: 22px 36px 0;
+  }
+  .tools { display: flex; gap: 26px; }
+  .tool { font-size: 0.9rem; color: var(--mute); }
+  .tool:hover { color: var(--ink); }
+
+  .board-wrap {
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    padding: 28px 24px 36px 48px;
+    display: grid;
+    place-items: center;
+  }
+  .board {
+    position: relative;
+    display: grid;
+    gap: var(--gap);
+  }
+
+  /* ---------- Tiles ---------- */
+  .band {
+    border-radius: calc(var(--cell) * 0.22);
+    background: rgba(194, 160, 97, 0.07);
+    margin: calc(var(--gap) * -1.6);
+    z-index: 0;
+  }
+  .cell {
+    position: relative;
+    z-index: 1;
+    width: var(--cell);
+    height: var(--cell);
+    display: grid;
+    place-items: center;
+    background: var(--tile);
+    border: 1px solid var(--line);
+    border-radius: calc(var(--cell) * 0.14);
+    cursor: pointer;
+    transition: background-color 0.25s, border-color 0.25s, box-shadow 0.6s;
+  }
+  .cell .num {
+    position: absolute;
+    top: calc(var(--cell) * 0.06);
+    left: calc(var(--cell) * 0.1);
+    font-family: var(--sans);
+    font-size: max(9px, calc(var(--cell) * 0.19));
+    line-height: 1;
+    color: var(--mute);
+  }
+  .cell .ch {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: calc(var(--cell) * 0.56);
+    line-height: 1;
+    color: var(--ink);
+    transform: translateY(2%);
+  }
+  .cell.active { background: var(--tile-active); border-color: var(--line-strong); }
+  .cell.cursor { box-shadow: inset 0 0 0 2px rgba(231, 223, 208, 0.55); }
+
+  .cell.key { background: var(--key); border-color: var(--brass-soft); }
+  .cell.key .ch { color: var(--brass); }
+  .cell.key.active { background: var(--key-active); }
+  .cell.key.cursor { box-shadow: inset 0 0 0 2px var(--brass); }
+
+  .cell.solved .ch { color: var(--ink-soft); }
+  .cell.revealed .ch { font-style: italic; font-weight: 400; }
+  .cell.key.solved { background: var(--brass); border-color: var(--brass); }
+  .cell.key.solved .ch { color: var(--bg); font-weight: 600; }
+  .cell.key.solved .num { color: rgba(27, 33, 43, 0.6); }
+
+  .cell.key.lit {
+    box-shadow: 0 0 0 1px var(--brass), 0 0 calc(var(--cell) * 0.55) rgba(194, 160, 97, 0.45);
+  }
+
+  .cell.shake { animation: shake 0.42s ease; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-5px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+  }
+  .cell.pop .ch { animation: pop 0.35s ease; }
+  @keyframes pop {
+    0% { transform: scale(0.7); opacity: 0.2; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ---------- Panel ---------- */
+  .panel {
+    min-height: 0;
+    padding: 28px 48px 36px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-width: 38rem;
+  }
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    color: var(--mute);
+    font-size: 0.95rem;
+    margin: 0 0 18px;
+    max-width: 30rem;
+  }
+  .clue {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(1.55rem, 1.1rem + 1.35vw, 2.6rem);
+    line-height: 1.32;
+    margin: 0;
+    max-width: 30ch;
+    min-height: 5.3em;
+    text-wrap: pretty;
+  }
+  .blank {
+    display: inline-block;
+    width: 2.2em;
+    border-bottom: 2px solid var(--brass-soft);
+    margin: 0 0.12em;
+    transform: translateY(-0.18em);
+  }
+  .status {
+    min-height: 1.6em;
+    margin: 18px 0 0;
+    font-size: 1rem;
+    color: var(--mute);
+  }
+  .status.ok { color: var(--sage); }
+  .status.bad { color: var(--rose); }
+
+  .nav { display: flex; gap: 12px; margin-top: 22px; }
+  .btn {
+    padding: 11px 22px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    font-size: 1rem;
+    color: var(--ink);
+  }
+  .btn:hover:not(:disabled) { border-color: var(--ink-soft); }
+  .btn.primary { border-color: var(--brass-soft); color: var(--brass); }
+  .btn.primary:hover:not(:disabled) { border-color: var(--brass); }
+
+  .secondary { display: flex; gap: 22px; margin-top: 18px; }
+  .link {
+    font-size: 0.95rem;
+    color: var(--mute);
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 4px;
+  }
+  .link:hover:not(:disabled) { color: var(--ink); }
+
+  .strip { display: flex; gap: 6px; margin-top: 44px; max-width: 34rem; }
+  .strip .space { flex: 0 0 12px; }
+  .stile {
+    flex: 0 1 2.25rem;
+    min-width: 0;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 1.15rem;
+    color: var(--brass);
+    transition: border-color 0.2s, background-color 0.2s;
+  }
+  .stile.filled { background: rgba(194, 160, 97, 0.12); border-color: rgba(194, 160, 97, 0.3); }
+  .stile.current { border-color: var(--ink-soft); }
+  .stile:hover { border-color: var(--ink-soft); }
+
+  .finale-btn { margin-top: 26px; align-self: flex-start; }
+
+  /* One clue vs all clues */
+  .play { display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
+  .clue-list { display: none; }
+  .play.all .single { display: none; }
+  .play.all .clue-list {
+    display: block;
+    list-style: none;
+    margin: 0;
+    padding: 0 6px 0 0;
+    overflow-y: auto;
+    min-height: 0;
+    flex: 0 1 auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  .play.all .status { margin-top: 14px; }
+  .clue-list li + li { margin-top: 2px; }
+  .citem {
+    display: grid;
+    grid-template-columns: 1.9rem 1fr;
+    column-gap: 10px;
+    width: 100%;
+    text-align: left;
+    padding: 7px 12px 7px 10px;
+    border-left: 2px solid transparent;
+    border-radius: 0 8px 8px 0;
+    color: var(--ink-soft);
+  }
+  .citem:hover { background: rgba(231, 223, 208, 0.04); }
+  .citem.current { border-left-color: var(--brass); background: rgba(231, 223, 208, 0.06); color: var(--ink); }
+  .citem .n { font-size: 0.9rem; color: var(--mute); padding-top: 0.2em; }
+  .citem .t { font-family: var(--serif); font-size: clamp(1rem, 0.8rem + 0.4vw, 1.22rem); line-height: 1.34; }
+  .citem .m { font-family: var(--sans); font-size: 0.85em; color: var(--mute); margin-left: 0.35em; white-space: nowrap; }
+  .citem.solved .m { color: var(--brass); letter-spacing: 0.04em; }
+
+  /* Finale view inside the panel */
+  .finale[hidden], .play[hidden] { display: none; }
+  .finale .lead { color: var(--mute); margin: 0 0 14px; }
+  .finale h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(2.3rem, 1.4rem + 2.8vw, 4.2rem);
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    margin: 0;
+    color: var(--brass);
+    max-width: 13ch;
+  }
+  .finale .sub {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: clamp(1.2rem, 1rem + 0.6vw, 1.6rem);
+    color: var(--ink-soft);
+    margin: 22px 0 36px;
+  }
+
+  /* ---------- Help ---------- */
+  .help {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(18, 22, 29, 0.82);
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+  .help[hidden] { display: none; }
+  .help-card {
+    background: var(--tile);
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    padding: 30px 34px 26px;
+    max-width: 34rem;
+    width: 100%;
+  }
+  .help-card h2 { font-family: var(--serif); font-weight: 500; font-size: 1.5rem; margin: 0 0 18px; }
+  .help-card dl { display: grid; grid-template-columns: auto 1fr; gap: 10px 22px; margin: 0 0 24px; }
+  .help-card dt { color: var(--ink); white-space: nowrap; }
+  .help-card dd { margin: 0; color: var(--ink-soft); }
+  kbd {
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    padding: 1px 7px;
+    border: 1px solid var(--line-strong);
+    border-radius: 5px;
+    color: var(--ink);
+  }
+
+  .kbd-input {
+    position: fixed;
+    left: 0; bottom: 0;
+    width: 1px; height: 1px;
+    opacity: 0;
+    font-size: 16px;
+    border: 0; padding: 0;
+  }
+  canvas.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+
+  /* ---------- Small screens ---------- */
+  @media (max-width: 860px) {
+    body { overflow: auto; }
+    .app { height: auto; min-height: 100dvh; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; }
+    .top { padding: 18px 20px 0; }
+    .tools { gap: 16px; }
+    .board-wrap { height: 52vh; padding: 20px 16px; }
+    .panel { padding: 8px 20px 40px; max-width: none; }
+    .clue { min-height: 0; }
+    .strip { margin-top: 30px; gap: 4px; }
+    .strip .space { flex-basis: 8px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cell, .stile { transition: none; }
+    .cell.shake, .cell.pop .ch { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="tools">
+      <button class="tool" id="listBtn">Show all clues</button>
+      <button class="tool" id="helpBtn">Keys</button>
+      <button class="tool" id="fsBtn">Full screen</button>
+      <button class="tool" id="resetBtn">Start over</button>
+    </div>
+  </header>
+
+  <div class="board-wrap" id="boardWrap">
+    <div class="board" id="board" role="grid" aria-label="Crossword"></div>
+  </div>
+
+  <aside class="panel">
+    <div class="play" id="play">
+      <div class="single">
+        <p class="meta"><span id="clueNum"></span><span id="clueLen"></span></p>
+        <p class="clue" id="clueText" aria-live="polite"></p>
+      </div>
+      <ol class="clue-list" id="clueList" aria-label="All clues"></ol>
+      <p class="status" id="status" aria-live="polite"></p>
+      <div class="nav single">
+        <button class="btn" id="prevBtn">Previous</button>
+        <button class="btn primary" id="nextBtn">Next</button>
+      </div>
+      <div class="secondary">
+        <button class="link" id="revealBtn">Show answer</button>
+        <button class="link" id="clearBtn">Clear</button>
+      </div>
+      <div class="strip single" id="strip" aria-label="Hidden message so far"></div>
+      <button class="btn primary finale-btn" id="finaleBtn" hidden>Show the message</button>
+    </div>
+
+    <div class="finale" id="finale" hidden>
+      <p class="lead">The column reads</p>
+      <h2>Grattis på 40&#8209;årsdagen, Elias!</h2>
+      <p class="sub">Happy 40th birthday.</p>
+      <button class="btn" id="backBtn">Back to the puzzle</button>
+    </div>
+  </aside>
+</div>
+
+<div class="help" id="help" hidden>
+  <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <h2 id="helpTitle">How to drive it</h2>
+    <dl>
+      <dt>Type</dt><dd>Fills the current answer, letters and digits both work</dd>
+      <dt><kbd>Enter</kbd></dt><dd>Checks the answer, or moves on if it is solved</dd>
+      <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Previous or next clue (Page Up and Page Down also work, so a presentation clicker does too)</dd>
+      <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Moves between squares in the answer</dd>
+      <dt><kbd>Backspace</kbd></dt><dd>Deletes a letter</dd>
+      <dt>Click</dt><dd>Any square, message tile or listed clue jumps to that clue</dd>
+      <dt>Show all clues</dt><dd>Top right: switches between one clue at a time and the full list</dd>
+      <dt><kbd>?</kbd></dt><dd>Opens this list, <kbd>Esc</kbd> closes it</dd>
+    </dl>
+    <p style="color: var(--mute); margin: 0 0 22px; font-size: 0.95rem;">Progress is saved in this browser, so a reload picks up where you left off. Start over clears everything.</p>
+    <button class="btn" id="helpClose">Close</button>
+  </div>
+</div>
+
+<input class="kbd-input" id="kbd" type="text" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" aria-hidden="true" tabindex="-1">
+<canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
+
+<script>
+/* ============================================================
+   Puzzle content. Edit here.
+   key = position (counting from 0) of the letter that sits in
+   the shaded column. A space in the message adds a gap row.
+   ============================================================ */
+const PUZZLE = {
+  message: "GRATTIS ELIAS",
+  words: [
+    { answer: "GANTT",        key: 0, clue: "Bars on a timeline, each task in its row: your project students draw it. Which chart do you know?" },
+    { answer: "METAPHOR",     key: 7, clue: "Your thesis explored, with a philosopher's flair, a figure of speech that engineers share." },
+    { answer: "JAPAN",        key: 1, clue: "You studied and lived there not once but twice: land of the rising sun, sake and rice." },
+    { answer: "MECHATRONICS", key: 5, clue: "Mechanics, electronics, some code in the mix: your PhD was set in the world of ___." },
+    { answer: "COMPLEXITY",   key: 8, clue: "Half of your research, the part hard to see: how tangled a project feels, its ___." },
+    { answer: "EXPERTISE",    key: 6, clue: "What separates novice from master with ease? The other half of your research: engineering ___." },
+    { answer: "HANDELS",      key: 6, clue: "Before KTH you did research in town at Stockholm's business school. What's its short name around town?" },
+    { answer: "EH2720",       key: 0, clue: "Management of Projects, your course to command. What's its code? Two letters, four digits at hand." },
+    { answer: "IL2232",       key: 1, clue: "Embedded Systems Design Project, you teach it too. Its code starts with I, then L. Four digits will do." },
+    { answer: "TEKNIKRINGEN", key: 4, clue: "Your office is at number 33. Which KTH street is home to your room and your tea?" },
+    { answer: "QUALITY",      key: 2, clue: "EH2030's title has a word you should spot: \"Business Development and ___ Management\". What?" },
+    { answer: "SENSEI",       key: 0, clue: "In Tokyo, a teacher like you would be called this. Can you guess the word, Elias?" }
+  ]
+};
+
+(() => {
+  const W = PUZZLE.words;
+  const N = W.length;
+  const letters = PUZZLE.message.replace(/\s+/g, "");
+  const gapsAfter = new Set();
+  { let n = 0; for (const ch of PUZZLE.message) { if (ch === " ") gapsAfter.add(n - 1); else n++; } }
+
+  // Sanity check so an edit that breaks the message is caught in the console
+  W.forEach((w, i) => {
+    if (w.answer[w.key] !== letters[i]) console.warn(`Clue ${i + 1}: ${w.answer}[${w.key}] is "${w.answer[w.key]}", message needs "${letters[i]}"`);
+  });
+  if (letters.length !== N) console.warn("Message length and number of words differ");
+
+  // ---------- Geometry ----------
+  const maxKey = Math.max(...W.map(w => w.key));
+  const lead = W.map(w => maxKey - w.key);
+  const cols = Math.max(...W.map((w, i) => lead[i] + w.answer.length));
+  const rowOf = [];
+  const rowTemplate = [];
+  { let r = 0; W.forEach((w, i) => { rowOf.push(++r); rowTemplate.push("var(--cell)"); if (gapsAfter.has(i)) { r++; rowTemplate.push("calc(var(--cell) * 0.45)"); } }); }
+  const totalRows = rowTemplate.length;
+  const gapRows = totalRows - N;
+
+  // ---------- State ----------
+  const STORE = "elias40-crossword";
+  const SIG = W.map(w => w.answer).join("|");
+  let state = fresh();
+  let view = "play";
+  let mode = "one";          // "one" clue at a time, or "all"
+  let transient = null;      // { text, tone } shown under the clue until navigation
+  let advanceTimer = null;
+
+  function fresh() {
+    return { cur: 0, pos: 0, entries: W.map(w => Array(w.answer.length).fill("")), revealed: W.map(() => false) };
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE) || "null");
+      if (s && s.sig === SIG && Array.isArray(s.entries) && s.entries.length === N) {
+        state = { cur: s.cur | 0, pos: s.pos | 0, entries: s.entries, revealed: s.revealed || W.map(() => false) };
+        if (s.mode === "all") mode = "all";
+      }
+    } catch (e) { /* storage unavailable, start fresh */ }
+  }
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify({ sig: SIG, ...state, mode })); } catch (e) { /* ignore */ }
+  }
+
+  const isSolved = i => state.entries[i].join("") === W[i].answer;
+  const allSolved = () => W.every((_, i) => isSolved(i));
+  const lenText = i => `${W[i].answer.length} ${/\d/.test(W[i].answer) ? "characters" : "letters"}`;
+  const firstEmpty = i => { const k = state.entries[i].indexOf(""); return k === -1 ? W[i].answer.length - 1 : k; };
+
+  // ---------- DOM ----------
+  const $ = id => document.getElementById(id);
+  const board = $("board"), wrap = $("boardWrap");
+  const cells = [];
+  const listItems = [];
+  let lastScrolled = -1;
+
+  function buildBoard() {
+    board.style.gridTemplateColumns = `repeat(${cols}, var(--cell))`;
+    board.style.gridTemplateRows = rowTemplate.join(" ");
+    const band = document.createElement("div");
+    band.className = "band";
+    band.style.gridColumn = `${maxKey + 1}`;
+    band.style.gridRow = `1 / ${totalRows + 1}`;
+    board.appendChild(band);
+
+    W.forEach((w, i) => {
+      cells[i] = [];
+      [...w.answer].forEach((_, j) => {
+        const el = document.createElement("div");
+        el.className = "cell" + (j === w.key ? " key" : "");
+        el.style.gridRow = rowOf[i];
+        el.style.gridColumn = lead[i] + j + 1;
+        el.setAttribute("role", "gridcell");
+        if (j === 0) { const n = document.createElement("span"); n.className = "num"; n.textContent = i + 1; el.appendChild(n); }
+        const ch = document.createElement("span"); ch.className = "ch"; el.appendChild(ch);
+        el.addEventListener("click", () => {
+          if (view !== "play") return;
+          go(i);
+          if (!isSolved(i)) { state.pos = j; render(); }
+          focusKbd();
+        });
+        board.appendChild(el);
+        cells[i][j] = el;
+      });
+    });
+
+    // Message strip
+    const strip = $("strip");
+    W.forEach((_, i) => {
+      const t = document.createElement("button");
+      t.className = "stile";
+      t.setAttribute("aria-label", `Clue ${i + 1}`);
+      t.title = `Clue ${i + 1}`;
+      t.addEventListener("click", () => { if (view === "play") go(i); });
+      strip.appendChild(t);
+      if (gapsAfter.has(i)) { const s = document.createElement("span"); s.className = "space"; strip.appendChild(s); }
+    });
+
+    // All-clues list
+    const list = $("clueList");
+    W.forEach((w, i) => {
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.className = "citem";
+      const n = document.createElement("span"); n.className = "n"; n.textContent = i + 1;
+      const t = document.createElement("span"); t.className = "t"; fillClue(t, w.clue);
+      const m = document.createElement("span"); m.className = "m";
+      t.appendChild(m);
+      b.append(n, t);
+      b.addEventListener("click", () => { if (view === "play") { go(i); focusKbd(); } });
+      li.appendChild(b); list.appendChild(li);
+      listItems[i] = b;
+    });
+  }
+
+  function sizeBoard() {
+    const r = wrap.getBoundingClientRect();
+    const cs = getComputedStyle(wrap);
+    const w = r.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const h = r.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const g = 0.1;
+    const byW = w / (cols + (cols - 1) * g);
+    const byH = h / ((N + gapRows * 0.45) + (totalRows - 1) * g);
+    const cell = Math.max(16, Math.min(92, Math.floor(Math.min(byW, byH))));
+    document.documentElement.style.setProperty("--cell", cell + "px");
+    document.documentElement.style.setProperty("--gap", Math.max(2, Math.round(cell * g)) + "px");
+  }
+
+  function setClueText(text) { fillClue($("clueText"), text); }
+  function fillClue(el, text) {
+    el.textContent = "";
+    text.split("___").forEach((part, k, arr) => {
+      el.appendChild(document.createTextNode(part));
+      if (k < arr.length - 1) { const b = document.createElement("span"); b.className = "blank"; b.setAttribute("aria-label", "blank"); el.appendChild(b); }
+    });
+  }
+
+  function render() {
+    const { cur, pos, entries, revealed } = state;
+    W.forEach((w, i) => {
+      const solved = isSolved(i);
+      cells[i].forEach((el, j) => {
+        el.querySelector(".ch").textContent = entries[i][j];
+        el.classList.toggle("active", i === cur && view !== "finale");
+        el.classList.toggle("cursor", i === cur && j === pos && !solved && view === "play");
+        el.classList.toggle("solved", solved);
+        el.classList.toggle("revealed", solved && revealed[i]);
+      });
+    });
+
+    const w = W[cur];
+    $("clueNum").textContent = `Clue ${cur + 1} of ${N}`;
+    $("clueLen").textContent = lenText(cur);
+    setClueText(w.clue);
+
+    $("play").classList.toggle("all", mode === "all");
+    $("listBtn").textContent = mode === "all" ? "Show one clue" : "Show all clues";
+    listItems.forEach((b, i) => {
+      const s = isSolved(i);
+      b.classList.toggle("current", i === cur);
+      b.classList.toggle("solved", s);
+      b.querySelector(".m").textContent = s ? W[i].answer : `(${W[i].answer.length})`;
+    });
+    if (mode === "all" && lastScrolled !== cur && view === "play") {
+      lastScrolled = cur;
+      const list = $("clueList"), b = listItems[cur];
+      const top = b.offsetTop - list.offsetTop, bottom = top + b.offsetHeight;
+      if (top < list.scrollTop) list.scrollTop = top - 8;
+      else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight + 8;
+    }
+
+    const st = $("status");
+    st.className = "status";
+    if (transient) { st.textContent = transient.text; if (transient.tone) st.classList.add(transient.tone); }
+    else if (isSolved(cur)) { st.textContent = revealed[cur] ? "Answer shown" : "Solved"; st.classList.add("ok"); }
+    else st.textContent = "";
+
+    $("prevBtn").disabled = cur === 0;
+    $("nextBtn").disabled = cur === N - 1;
+    $("revealBtn").disabled = isSolved(cur);
+    $("clearBtn").disabled = !entries[cur].some(c => c);
+
+    [...$("strip").querySelectorAll(".stile")].forEach((t, i) => {
+      const s = isSolved(i);
+      t.textContent = s ? letters[i] : "";
+      t.classList.toggle("filled", s);
+      t.classList.toggle("current", i === cur && view === "play");
+    });
+
+    $("finaleBtn").hidden = !(allSolved() && view === "play");
+    save();
+  }
+
+  // ---------- Actions ----------
+  function go(i) {
+    clearTimeout(advanceTimer);
+    state.cur = Math.max(0, Math.min(N - 1, i));
+    state.pos = isSolved(state.cur) ? 0 : firstEmpty(state.cur);
+    transient = null;
+    render();
+  }
+
+  function type(ch) {
+    const i = state.cur;
+    if (isSolved(i)) { transient = { text: "Already solved. Use Clear to type it again." }; render(); return; }
+    clearTimeout(advanceTimer);
+    state.entries[i][state.pos] = ch;
+    pop(cells[i][state.pos]);
+    if (state.pos < W[i].answer.length - 1) state.pos++;
+    transient = null;
+    if (state.entries[i].every(c => c)) check();
+    else render();
+  }
+
+  function check() {
+    const i = state.cur;
+    if (isSolved(i)) { solvedNow(i, true); return; }
+    if (!state.entries[i].every(c => c)) {
+      transient = { text: "Fill every square first." };
+      render();
+      return;
+    }
+    transient = { text: "Not quite. Fix a letter or two and it checks again.", tone: "bad" };
+    render();
+    shake(i);
+  }
+
+  function solvedNow(i, advance) {
+    transient = null;
+    render();
+    if (allSolved()) { advanceTimer = setTimeout(openFinale, 1100); return; }
+    if (advance) {
+      advanceTimer = setTimeout(() => {
+        if (state.cur === i && view === "play") go(nextUnsolved(i));
+      }, 1100);
+    }
+  }
+
+  function nextUnsolved(i) {
+    for (let d = 1; d <= N; d++) { const j = (i + d) % N; if (!isSolved(j)) return j; }
+    return i;
+  }
+
+  function backspace() {
+    const i = state.cur;
+    if (isSolved(i)) return;
+    const e = state.entries[i];
+    if (e[state.pos]) e[state.pos] = "";
+    else if (state.pos > 0) { state.pos--; e[state.pos] = ""; }
+    transient = null;
+    render();
+  }
+
+  function moveCursor(d) {
+    const i = state.cur;
+    if (isSolved(i)) return;
+    state.pos = Math.max(0, Math.min(W[i].answer.length - 1, state.pos + d));
+    render();
+  }
+
+  function reveal() {
+    const i = state.cur;
+    if (isSolved(i)) return;
+    clearTimeout(advanceTimer);
+    state.entries[i] = [...W[i].answer];
+    state.revealed[i] = true;
+    cells[i].forEach(pop);
+    solvedNow(i, false);
+  }
+
+  function clearRow() {
+    const i = state.cur;
+    clearTimeout(advanceTimer);
+    state.entries[i] = Array(W[i].answer.length).fill("");
+    state.revealed[i] = false;
+    state.pos = 0;
+    transient = null;
+    render();
+    focusKbd();
+  }
+
+  function resetAll() {
+    if (!confirm("Clear every answer and go back to the first clue?")) return;
+    clearTimeout(advanceTimer);
+    state = fresh();
+    transient = null;
+    showPlay();
+  }
+
+  function pop(el) {
+    el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
+  }
+  function shake(i) {
+    cells[i].forEach(el => { el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); });
+    setTimeout(() => cells[i].forEach(el => el.classList.remove("shake")), 450);
+  }
+
+  // ---------- Views ----------
+  function showPlay() {
+    view = "play";
+    lastScrolled = -1;
+    $("finale").hidden = true;
+    $("play").hidden = false;
+    unlight();
+    render();
+    focusKbd();
+  }
+  function openFinale() {
+    if (!allSolved()) return;
+    view = "finale";
+    $("play").hidden = true;
+    $("finale").hidden = false;
+    render();
+    light();
+    confetti();
+    $("backBtn").focus({ preventScroll: true });
+  }
+  function light() {
+    W.forEach((w, i) => {
+      const el = cells[i][w.key];
+      el.style.transitionDelay = (i * 110) + "ms";
+      el.classList.add("lit");
+    });
+  }
+  function unlight() {
+    W.forEach((w, i) => { const el = cells[i][w.key]; el.style.transitionDelay = "0ms"; el.classList.remove("lit"); });
+  }
+
+  function openHelp() { $("help").hidden = false; $("helpClose").focus(); }
+  function closeHelp() { $("help").hidden = true; if (view === "play") focusKbd(); }
+
+  const kbd = $("kbd");
+  function focusKbd() { try { kbd.focus({ preventScroll: true }); } catch (e) {} }
+
+  // ---------- Input ----------
+  const VALID = /^[a-z0-9åäöé]$/i;
+
+  document.addEventListener("keydown", e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    const onButton = e.target && e.target.tagName === "BUTTON";
+
+    if (!$("help").hidden) {
+      if (k === "Escape" || k === "?") { e.preventDefault(); closeHelp(); }
+      return;
+    }
+    if (k === "?") { e.preventDefault(); openHelp(); return; }
+    if (view === "finale") {
+      if (k === "Escape" || (k === "Enter" && !onButton)) { e.preventDefault(); showPlay(); }
+      return;
+    }
+
+    switch (k) {
+      case "ArrowUp": case "PageUp": e.preventDefault(); go(state.cur - 1); return;
+      case "ArrowDown": case "PageDown": e.preventDefault(); go(state.cur + 1); return;
+      case "ArrowLeft": e.preventDefault(); moveCursor(-1); return;
+      case "ArrowRight": e.preventDefault(); moveCursor(1); return;
+      case "Backspace": e.preventDefault(); backspace(); return;
+      case "Delete": e.preventDefault(); if (!isSolved(state.cur)) { state.entries[state.cur][state.pos] = ""; render(); } return;
+      case "Escape": return;
+      case "Enter":
+        if (onButton) return;
+        e.preventDefault();
+        if (isSolved(state.cur)) go(state.cur === N - 1 ? state.cur : state.cur + 1);
+        else check();
+        return;
+    }
+    if (k.length === 1 && VALID.test(k)) { e.preventDefault(); type(k.toUpperCase()); }
+  });
+
+  // Mobile keyboards that don't report keys on keydown
+  kbd.addEventListener("input", () => {
+    const v = kbd.value; kbd.value = "";
+    if (view !== "play") return;
+    for (const ch of v) if (VALID.test(ch)) type(ch.toUpperCase());
+  });
+  wrap.addEventListener("click", e => { if (view === "play" && e.target === wrap) focusKbd(); });
+
+  // ---------- Buttons ----------
+  $("listBtn").addEventListener("click", () => {
+    mode = mode === "all" ? "one" : "all";
+    lastScrolled = -1;
+    if (view === "finale") showPlay(); else { render(); focusKbd(); }
+  });
+  $("prevBtn").addEventListener("click", () => { go(state.cur - 1); });
+  $("nextBtn").addEventListener("click", () => { go(state.cur + 1); });
+  $("revealBtn").addEventListener("click", reveal);
+  $("clearBtn").addEventListener("click", clearRow);
+  $("resetBtn").addEventListener("click", resetAll);
+  $("finaleBtn").addEventListener("click", openFinale);
+  $("backBtn").addEventListener("click", showPlay);
+  $("helpBtn").addEventListener("click", openHelp);
+  $("helpClose").addEventListener("click", closeHelp);
+  $("help").addEventListener("click", e => { if (e.target === $("help")) closeHelp(); });
+
+  const fsBtn = $("fsBtn");
+  if (!document.documentElement.requestFullscreen) fsBtn.hidden = true;
+  fsBtn.addEventListener("click", () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+  });
+  document.addEventListener("fullscreenchange", () => {
+    fsBtn.textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+  });
+
+  // ---------- Confetti (muted, brief) ----------
+  const canvas = $("confetti");
+  function confetti() {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const Wd = innerWidth, Ht = innerHeight;
+    canvas.width = Wd * dpr; canvas.height = Ht * dpr;
+    canvas.style.width = Wd + "px"; canvas.style.height = Ht + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const colors = ["#c2a061", "#93a98f", "#c3887d", "#e7dfd0", "#8d9bb3"];
+    const ps = Array.from({ length: 130 }, () => ({
+      x: Math.random() * Wd, y: -20 - Math.random() * Ht * 0.5,
+      vx: (Math.random() - 0.5) * 1.1, vy: 1.2 + Math.random() * 2,
+      w: 5 + Math.random() * 6, h: 3 + Math.random() * 4,
+      r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.12,
+      c: colors[(Math.random() * colors.length) | 0]
+    }));
+    const dur = 5200, t0 = performance.now();
+    function frame(t) {
+      const el = t - t0;
+      ctx.clearRect(0, 0, Wd, Ht);
+      ctx.globalAlpha = el > dur - 1200 ? Math.max(0, (dur - el) / 1200) : 0.85;
+      for (const p of ps) {
+        p.x += p.vx + Math.sin((el + p.y) / 600) * 0.4; p.y += p.vy; p.r += p.vr;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+        ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
+      }
+      if (el < dur) requestAnimationFrame(frame); else ctx.clearRect(0, 0, Wd, Ht);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- Init ----------
+  load();
+  buildBoard();
+  sizeBoard();
+  render();
+  if ("ResizeObserver" in window) new ResizeObserver(sizeBoard).observe(wrap);
+  else addEventListener("resize", sizeBoard);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeBoard);
+  showPlay();
+})();
+</script>
+</body>
+</html>
