@@ -428,29 +428,35 @@
 <script>
 /* ============================================================
    Puzzle content. Edit here.
-   key = position (counting from 0) of the letter that sits in
-   the shaded column. A space in the message adds a gap row.
+   key = position (counting from 0, spaces included) of the letter that
+   sits in the shaded column. A space in an answer leaves a gap in the
+   row and is not typed. A space in the message adds a gap row.
    ============================================================ */
 const PUZZLE = {
   message: "GRATTIS ELIAS",
   words: [
-    { answer: "GANTT",        key: 0, clue: "Bars on a timeline, each task in its row: your project students draw it. Which chart do you know?" },
-    { answer: "METAPHOR",     key: 7, clue: "Your thesis explored, with a philosopher's flair, a figure of speech that engineers share." },
-    { answer: "JAPAN",        key: 1, clue: "You studied and lived there not once but twice: land of the rising sun, sake and rice." },
-    { answer: "MECHATRONICS", key: 5, clue: "Mechanics, electronics, some code in the mix: your PhD was set in the world of ___." },
-    { answer: "COMPLEXITY",   key: 8, clue: "Half of your research, the part hard to see: how tangled a project feels, its ___." },
-    { answer: "EXPERTISE",    key: 6, clue: "What separates novice from master with ease? The other half of your research: engineering ___." },
-    { answer: "HANDELS",      key: 6, clue: "Before KTH you did research in town at Stockholm's business school. What's its short name around town?" },
-    { answer: "EH2720",       key: 0, clue: "Management of Projects, your course to command. What's its code? Two letters, four digits at hand." },
-    { answer: "IL2232",       key: 1, clue: "Embedded Systems Design Project, you teach it too. Its code starts with I, then L. Four digits will do." },
-    { answer: "TEKNIKRINGEN", key: 4, clue: "Your office is at number 33. Which KTH street is home to your room and your tea?" },
-    { answer: "QUALITY",      key: 2, clue: "EH2030's title has a word you should spot: \"Business Development and ___ Management\". What?" },
-    { answer: "SENSEI",       key: 0, clue: "In Tokyo, a teacher like you would be called this. Can you guess the word, Elias?" }
+    { answer: "GANTT",         key: 0,  clue: "Bars on a timeline, each task in its row: your project students draw it. Which chart do you know?" },
+    { answer: "NSE SEMINARS",  key: 10, clue: "Slides on Friday, cinnamon buns after: the series you organise for the division." },
+    { answer: "JAPAN",         key: 1,  clue: "You studied and lived there not once but twice: land of the rising sun, sake and rice." },
+    { answer: "GAME NIGHT",    key: 9,  clue: "Friendly rivalries, too many snacks, and rules nobody fully remembers: the evening you keep bringing back." },
+    { answer: "FACULTY BOARD", key: 5,  clue: "\u201cLess talk, more action,\u201d says your campaign. Where do you want a seat from 2027?" },
+    { answer: "BAVARIA",       key: 5,  clue: "You got the chance to show off your own Lederhosen in ___." },
+    { answer: "HANDELS",       key: 6,  clue: "Before KTH you did research in town at Stockholm's business school. What's its short name around town?" },
+    { answer: "METEORA",       key: 1,  clue: "Some people wear band merch, but you wear a whole album. Which Linkin Park one?" },
+    { answer: "IL2232",        key: 1,  clue: "Embedded Systems Design Project, you teach it too. Its code starts with I, then L. Four digits will do." },
+    { answer: "TEKNIKRINGEN",  key: 4,  clue: "Your office is at number 33. Which KTH street is home to your room and your tea?" },
+    { answer: "QUALITY",       key: 2,  clue: "A course you teach: \"Business Development and ___ Management\"." },
+    { answer: "SENSEI",        key: 0,  clue: "What would a teacher (like you) be called in Japanese?" }
   ]
 };
 
 (() => {
-  const W = PUZZLE.words;
+  const W = PUZZLE.words.map(w => {
+    const raw = w.answer.toUpperCase();
+    const slots = [];
+    [...raw].forEach((ch, k) => { if (ch !== " ") slots.push(k); });
+    return { raw, answer: raw.replace(/ /g, ""), slots, rawKey: w.key, key: slots.indexOf(w.key), clue: w.clue };
+  });
   const N = W.length;
   const letters = PUZZLE.message.replace(/\s+/g, "");
   const gapsAfter = new Set();
@@ -463,9 +469,9 @@ const PUZZLE = {
   if (letters.length !== N) console.warn("Message length and number of words differ");
 
   // ---------- Geometry ----------
-  const maxKey = Math.max(...W.map(w => w.key));
-  const lead = W.map(w => maxKey - w.key);
-  const cols = Math.max(...W.map((w, i) => lead[i] + w.answer.length));
+  const maxKey = Math.max(...W.map(w => w.rawKey));
+  const lead = W.map(w => maxKey - w.rawKey);
+  const cols = Math.max(...W.map((w, i) => lead[i] + w.raw.length));
   const rowOf = [];
   const rowTemplate = [];
   { let r = 0; W.forEach((w, i) => { rowOf.push(++r); rowTemplate.push("var(--cell)"); if (gapsAfter.has(i)) { r++; rowTemplate.push("calc(var(--cell) * 0.45)"); } }); }
@@ -474,7 +480,7 @@ const PUZZLE = {
 
   // ---------- State ----------
   const STORE = "elias40-crossword";
-  const SIG = W.map(w => w.answer).join("|");
+  const SIG = W.map(w => w.raw).join("|");
   let state = fresh();
   let view = "play";
   let mode = "one";          // "one" clue at a time, or "all"
@@ -499,7 +505,8 @@ const PUZZLE = {
 
   const isSolved = i => state.entries[i].join("") === W[i].answer;
   const allSolved = () => W.every((_, i) => isSolved(i));
-  const lenText = i => `${W[i].answer.length} ${/\d/.test(W[i].answer) ? "characters" : "letters"}`;
+  const parts = i => W[i].raw.split(" ").map(x => x.length).join(" + ");
+  const lenText = i => `${parts(i)} ${/\d/.test(W[i].answer) ? "characters" : "letters"}`;
   const firstEmpty = i => { const k = state.entries[i].indexOf(""); return k === -1 ? W[i].answer.length - 1 : k; };
 
   // ---------- DOM ----------
@@ -524,7 +531,7 @@ const PUZZLE = {
         const el = document.createElement("div");
         el.className = "cell" + (j === w.key ? " key" : "");
         el.style.gridRow = rowOf[i];
-        el.style.gridColumn = lead[i] + j + 1;
+        el.style.gridColumn = lead[i] + w.slots[j] + 1;
         el.setAttribute("role", "gridcell");
         if (j === 0) { const n = document.createElement("span"); n.className = "num"; n.textContent = i + 1; el.appendChild(n); }
         const ch = document.createElement("span"); ch.className = "ch"; el.appendChild(ch);
@@ -614,7 +621,7 @@ const PUZZLE = {
       const s = isSolved(i);
       b.classList.toggle("current", i === cur);
       b.classList.toggle("solved", s);
-      b.querySelector(".m").textContent = s ? W[i].answer : `(${W[i].answer.length})`;
+      b.querySelector(".m").textContent = s ? W[i].raw : `(${W[i].raw.split(" ").map(x => x.length).join(", ")})`;
     });
     if (mode === "all" && lastScrolled !== cur && view === "play") {
       lastScrolled = cur;
