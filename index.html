@@ -338,6 +338,18 @@
     font-size: 16px;
     border: 0; padding: 0;
   }
+  .reveal-corner {
+    position: fixed;
+    right: 18px;
+    bottom: 14px;
+    z-index: 5;
+    font-size: 0.8rem;
+    color: var(--mute);
+    opacity: 0.35;
+    transition: opacity 0.2s;
+  }
+  .reveal-corner:hover:not(:disabled), .reveal-corner:focus-visible { opacity: 1; }
+  .reveal-corner:disabled { opacity: 0.12; }
   canvas.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 
   /* ---------- Small screens ---------- */
@@ -388,7 +400,6 @@
         <button class="btn primary" id="nextBtn">Next</button>
       </div>
       <div class="secondary">
-        <button class="link" id="revealBtn">Show answer</button>
         <button class="link" id="clearBtn">Clear</button>
       </div>
       <div class="strip single" id="strip" aria-label="Hidden message so far"></div>
@@ -423,6 +434,7 @@
 </div>
 
 <input class="kbd-input" id="kbd" type="text" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" aria-hidden="true" tabindex="-1">
+<button class="reveal-corner" id="revealBtn">Show answer</button>
 <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
 
 <script>
